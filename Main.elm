@@ -2,58 +2,108 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 
+import Http
+
 main : Program Never Model Msg
-main = beginnerProgram
-       { model = model
-       , view = view
+main = program
+       { init = init
        , update = update
+       , view = view
+       , subscriptions = \_ -> Sub.none
        }
 
 type alias Model =
     { username : String
     , password : String
     , passwordConfirmation : String
-    , error : Error
+    , status : Status
     }
 
-type Error = NoError | PasswordMismatch
+type Status = Ok
+            | Checking
+            | Error ErrorType
 
-model : Model
-model = 
-    validate { username = "Bob"
+type ErrorType = PasswordMismatch
+               | UsernameTaken
+
+init : ( Model, Cmd Msg )
+init =
+    validate { username = "Joe"
              , password = "s3kr3t"
              , passwordConfirmation = "asdf"
-             , error = NoError
-             }
+             , status = Ok
+             } ! []
 
 type Msg = Username String
          | Password String
          | PasswordConfirmation String
+         | CheckUsernameResult (Result Http.Error String)
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let updated = case msg of
+    case msg of
         Username username ->
-            { model | username = username }
+            { model | username = username, status = Checking } ! [ checkUsername username ]
+
         Password password ->
-            { model | password = password }
+            validate { model | password = password } ! []
+
         PasswordConfirmation passwordConfirmation ->
-            { model | passwordConfirmation = passwordConfirmation }
-    in validate updated
+            validate { model | passwordConfirmation = passwordConfirmation } ! []
+
+        CheckUsernameResult (Result.Ok _) ->
+            { model | status = Error UsernameTaken } ! []
+
+        CheckUsernameResult (Result.Err err) ->
+            validate { model | status = Ok } ! []
+
 
 validate : Model -> Model
 validate model =
-    let error = if model.password == model.passwordConfirmation
-                then NoError
-                else PasswordMismatch
-    in { model | error = error }
+    case model.status of
+        Checking ->
+            model
+
+        Error UsernameTaken ->
+            model
+
+        _ ->
+            let status = if model.password == model.passwordConfirmation
+                         then Ok
+                         else Error PasswordMismatch
+            in { model | status = status }
+        
+
+checkUsername : String -> Cmd Msg
+checkUsername =
+    getRequest >> Http.send CheckUsernameResult
+
+getRequest : String -> Http.Request String
+getRequest username =
+    let url = "/usernames/" ++ username
+    in Http.request
+        { method = "GET"
+        , headers = []
+        , url = url
+        , body = Http.emptyBody
+        , expect = Http.expectString
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
 
 view : Model -> Html Msg
 view model =
-    let errorDiv = case model.error of
-                       NoError ->
+    let errorDiv = case model.status of
+                       Ok ->
                            div [ class "alert alert-danger hide" ] []
-                       PasswordMismatch ->
+                       Checking ->
+                           div [ class "alert alert-warning"]
+                               [ text "checking username" ]
+                       Error UsernameTaken ->
+                           div [ class "alert alert-danger" ]
+                               [ text "username is taken" ]
+                       Error PasswordMismatch ->
                            div [ class "alert alert-danger" ]
                                [ text "passwords don't match" ]
         inputs = viewFormInputs model
