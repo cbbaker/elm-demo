@@ -24,10 +24,10 @@ type Status = Ok
 
 init : ( Model, Cmd Msg )
 init =
-    let ( usernameInputModel, usernameInputCmd ) = UsernameInput.init "/usernames" "Joe"
+    let ( usernameInputModel, usernameInputCmd ) = UsernameInput.init "/usernames" ""
     in validate { usernameInputModel = usernameInputModel
-                , password = "s3kr3t"
-                , passwordConfirmation = "asdf"
+                , password = ""
+                , passwordConfirmation = ""
                 , status = Ok
                 } ! [ Cmd.map UsernameInputMsg usernameInputCmd ]
 

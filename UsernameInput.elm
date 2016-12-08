@@ -6,27 +6,39 @@ import Html.Events exposing (..)
 
 import Http
 
+import Task
+import Process
+import Time
+
 type Status = Ok | Checking | Invalid
+type Timer = Off | Waiting
 
 type alias Model =
     { uri : String
     , value : String
     , status : Status
+    , timer : Timer
     }
 
 type Msg = Input String
          | Lookup (Result Http.Error String)
+         | TimesUp ()
 
 init : String -> String -> ( Model, Cmd Msg )
 init uri value =
-    let model = Model uri value Ok
+    let model = Model uri value Ok Off
     in model ! [ check model ]
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Input value ->
-            let newModel = { model | value = value, status = Checking }
+            if model.timer == Waiting
+            then { model | value = value } ! []
+            else { model | value = value, timer = Waiting } ! [ setTimer ]
+
+        TimesUp _ ->
+            let newModel = { model | status = Checking, timer = Off }
             in newModel ! [ check newModel ]
 
         Lookup (Result.Ok _) ->
@@ -35,7 +47,10 @@ update msg model =
         Lookup (Result.Err _) ->
             { model | status = Ok } ! []
 
-
+        
+setTimer : Cmd Msg
+setTimer =
+    500 * Time.millisecond |> Process.sleep |> Task.perform TimesUp
 
 check : Model -> Cmd Msg
 check model =
